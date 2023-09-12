@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 class AddPage extends StatefulWidget {
@@ -9,23 +12,50 @@ class AddPage extends StatefulWidget {
 }
 
 class _AddPageState extends State<AddPage> {
-  String filePath = '';
+  String filepath = '';
+
   List<TextEditingController> controllers = [
     TextEditingController(),
     TextEditingController(),
   ];
+
   @override
   void initState() {
     // TODO: implement initState
     super.initState();
-    filePath = widget.filePath;
+    filepath = widget.filePath;
+  }
+
+  Future<bool> fileSave() async {
+    try {
+      File file = File(filepath);
+      List<dynamic> dataList = [];
+      var data = {
+        'title': controllers[0].text,
+        'contents': controllers[1].text
+      };
+      //기존에 파일이 있는 경우
+      if (file.existsSync()) {
+        var fileContents = await file.readAsString();
+        //[{기존 작성했던 글},{},{}...]=>String
+        dataList = jsonDecode(fileContents) as List<dynamic>;
+      }
+      //내가 방금 쓴 글을 추가
+      dataList.add(data);
+      var jsonData = jsonEncode(dataList);
+      await file.writeAsString(jsonData, mode: FileMode.append);
+      return true;
+    } catch (e) {
+      print(e);
+      return false;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(filePath),
+        title: Text(filepath),
         centerTitle: true,
       ),
       body: Form(
@@ -35,30 +65,42 @@ class _AddPageState extends State<AddPage> {
           children: [
             TextFormField(
               controller: controllers[0],
-              decoration: InputDecoration(
-                  border: OutlineInputBorder(), label: Text('title')),
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                label: Text('title',
+                    style: TextStyle(fontSize: 20, color: Colors.green)),
+              ),
             ),
-            SizedBox(
-              height: 30,
+            const SizedBox(
+              height: 20,
             ),
             Expanded(
               child: TextFormField(
                 controller: controllers[1],
-                maxLines: 10,
+                maxLines: 11,
                 maxLength: 100,
-                decoration: InputDecoration(
-                    border: OutlineInputBorder(), label: Text('contents')),
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  label: Text('contents',
+                      style: TextStyle(
+                        fontSize: 40,
+                        color: Colors.green,
+                      )),
+                ),
               ),
             ),
             ElevatedButton(
-                onPressed: () {
-                  var title = controllers[0];
-                  print(title);
-                  var contents = controllers[1];
-                  print(contents);
-                  Navigator.pop(context, 'ok');
-                },
-                child: Text('저장'))
+              onPressed: () {
+                var title = controllers[0].text;
+                var result = fileSave(); //T, F
+                if (result == true) {
+                  Navigator.pop(context, "ok");
+                } else {
+                  print('저장실패');
+                }
+              },
+              child: const Text('저장'),
+            )
           ],
         ),
       )),
