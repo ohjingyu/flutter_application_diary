@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_application_diary/add_page.dart';
-import 'package:path/path.dart';
+import 'package:flutter_application_diary/directory_page.dart';
 import 'package:path_provider/path_provider.dart';
 
 class MainPage extends StatefulWidget {
@@ -35,7 +35,7 @@ class Main extends StatefulWidget {
 class _MainState extends State<Main> {
   Directory? directory;
   String filePath = '';
-  String fileName = 'zzxx.json';
+  late String fileName = 'diary.json';
 
   dynamic myList = const Text(
     '준비',
@@ -46,6 +46,7 @@ class _MainState extends State<Main> {
   void initState() {
     // TODO: implement initState
     super.initState();
+    fileName = 'diary.json';
     getPath().then((value) {
       showList();
     });
@@ -71,20 +72,24 @@ class _MainState extends State<Main> {
               if (snapshot.hasData) {
                 var dataList = jsonDecode(snapshot.data!) as List<dynamic>;
                 if (dataList.isEmpty) {
-                  return const Text('내용이 존재하지 않음');
+                  return const Text(
+                    '내용이 없습니다.',
+                    style: TextStyle(fontSize: 50),
+                  );
                 }
+
                 return ListView.separated(
                     itemBuilder: (context, index) {
                       var data = dataList[index] as Map<String, dynamic>;
                       return ListTile(
-                        title: Text(data['title']),
-                        subtitle: Text(data['contents']),
-                        trailing: IconButton(
+                          title: Text(data['title']),
+                          subtitle: Text(data['contents']),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.delete),
                             onPressed: () {
                               deleteContents(index);
                             },
-                            icon: const Icon(Icons.delete)),
-                      );
+                          ));
                     },
                     separatorBuilder: (context, index) => const Divider(),
                     itemCount: dataList.length);
@@ -96,7 +101,10 @@ class _MainState extends State<Main> {
         });
       } else {
         setState(() {
-          myList = const Text('파일이 없어요');
+          myList = const Text(
+            '파일이 없습니다.',
+            style: TextStyle(fontSize: 50),
+          );
         });
       }
     } catch (e) {
@@ -107,55 +115,86 @@ class _MainState extends State<Main> {
   Future<void> deleteFile() async {
     try {
       var file = File(filePath);
-      var result = file.delete().then(
-        (value) {
-          print(value);
-          showList();
-        },
-      );
-      file.delete();
-      setState(() {});
+      if (file.existsSync()) {
+        file.delete().then(
+          (value) {
+            print(value);
+            showList();
+          },
+        );
+      }
     } catch (e) {
-      print('delete error');
+      print('deleteFile error');
     }
   }
 
-  deleteContents(int index) async {
+  Future<void> deleteContents(int index) async {
+    //파일을 불러옴 -> 그것을 [{},{}] -> jsondecode를 해서 List<map<dynamic>>으로 변환
+    //List니까 배열 조작 - 원하는 index번지 삭제 가능
+    //List<map<dynamic>> 를 jsonencode (String으로 변경) -> 다시 파일에 쓰기
+    //showList()
     try {
       File file = File(filePath);
-      var fileContents = await file.readAsString();
-      var dataList = jsonDecode(fileContents) as List<dynamic>;
+      var fileStr = await file.readAsString();
+      var dataList = jsonDecode(fileStr) as List<dynamic>;
       dataList.removeAt(index);
-
       var jsonData = jsonEncode(dataList);
-      var res = await file.writeAsString(jsonData).then(
-        (value) {
-          showList();
-        },
-      );
+      var res = await file
+          .writeAsString(jsonData, mode: FileMode.write)
+          .then((value) => showList());
     } catch (e) {
-      print('delete contents error');
+      print('deleteContents error');
     }
-    //파일을 불러옴 -> 그것을 [{},{}] -> jsondecode를 해서 List<map<dynamic>>으로 변환
-    // List니까 배열 조작 원하는 index번지 삭제하기
-    // List<map<dynamic>>을 jsonencode (String으로 변경) => 다시 파일에 쓰기
-    // showList()
+  }
+
+  Future<void> showFileList() async {
+    try {
+      filePath = directory!.path;
+      Directory dic = Directory(filePath);
+      var dataList = dic.listSync().toList();
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+            builder: (context) => DirectoryPage(dataList: dataList)),
+      );
+      getPath().then((value) => showList());
+    } catch (e) {
+      print('errer');
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Main Page'),
+        title: Text('File Name : $fileName'),
       ),
       body: SizedBox(
         width: double.infinity,
         height: double.infinity,
         child: Column(children: [
+          IconButton(
+              onPressed: () async {
+                var dt = await showDatePicker(
+                    context: context,
+                    initialDate: DateTime.now(),
+                    firstDate: DateTime(2023),
+                    lastDate: DateTime.now());
+                if (dt != null) {
+                  setState(() {
+                    fileName = '${dt.toString().split(' ')[0]}.json';
+                    getPath().then((value) {
+                      showList();
+                    });
+                  });
+                }
+              },
+              icon: const Icon(Icons.calendar_month)),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               ElevatedButton(onPressed: showList, child: const Text('조회')),
+              ElevatedButton(onPressed: showFileList, child: const Text('목록')),
               ElevatedButton(onPressed: deleteFile, child: const Text('삭제'))
             ],
           ),
@@ -175,8 +214,8 @@ class _MainState extends State<Main> {
             }
           },
           child: const Icon(
-            Icons.add_circle_outline,
-            size: 40,
+            Icons.upload_file_sharp,
+            size: 35,
           )),
     );
   }
